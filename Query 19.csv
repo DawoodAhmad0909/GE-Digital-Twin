@@ -1,0 +1,9 @@
+device_id,device_type,location,timestamp,rainfall_mm,humidity
+SM-AG01,"Soil Sensor","Field A1","2023-08-01 06:00:00",NULL,65.00
+SM-AG01,"Soil Sensor","Field A1","2023-08-01 12:00:00",NULL,42.00
+SM-AG01,"Soil Sensor","Field A1","2023-08-02 06:00:00",NULL,70.00
+SM-AG03,Drone,"Storage Shed","2023-08-02 10:00:00",NULL,55.00
+SM-AG01,"Soil Sensor","Field A1","2023-08-03 06:00:00",NULL,75.00
+SM-AG05,"Livestock Tracker","Pasture North","2023-08-03 08:00:00",NULL,65.00
+SM-AG01,"Soil Sensor","Field A1","2023-08-04 06:00:00",NULL,82.00
+SM-AG03,Drone,"Storage Shed","2023-08-04 14:00:00",NULL,60.00

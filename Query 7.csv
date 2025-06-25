@@ -1,0 +1,3 @@
+alert_id,device_id,timestamp,alert_type,severity,resolved,location
+3,SM-AG03,"2023-08-02 10:00:00","Low Battery",Critical,0,"Storage Shed"
+5,SM-AG04,"2023-08-04 18:00:00",Over-Irrigation,High,0,"Field A2"
