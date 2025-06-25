@@ -1,1 +1,3 @@
 reading_id,device_id,timestamp,soil_moisture,air_temp,humidity,rainfall_mm,wind_speed_kmh,alert_type
+3,SM-AG01,"2023-08-01 12:00:00",28.70,29.40,42.00,NULL,NULL,"Low Soil Moisture"
+16,SM-AG01,"2023-08-04 06:00:00",29.80,17.60,82.00,NULL,NULL,"Low Soil Moisture"

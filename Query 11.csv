@@ -1,1 +1,3 @@
-Date,device_id,soil_moisture,air_temp
+Date,Low_moisture,Maximum_temperature
+2023-08-01,28.70,30.10
+2023-08-03,31.50,27.80

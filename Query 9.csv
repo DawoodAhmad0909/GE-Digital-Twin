@@ -1,2 +1,4 @@
-avg_hours_to_resolve
-19.67
+alert_type,avg_hours_to_resolve
+"Low Soil Moisture",18.00
+"High Wind Speed",17.00
+"High Humidity",24.00
