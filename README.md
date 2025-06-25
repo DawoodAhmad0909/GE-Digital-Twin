@@ -69,7 +69,7 @@ ON d.device_id=sd.device_id
 WHERE LOWER(d.crop_type)='wheat'
 GROUP BY  d.device_id,d.device_type,d.location;
 ```
-#### 3. Calculate the average days since installation for each device type.
+#### 3. Calculate the average days since installation for each device type
 ``` sql
 SELECT 
         device_type,
@@ -88,23 +88,26 @@ JOIN farm_alerts a
 ON d.device_id=a.device_id
 WHERE 
         sd.soil_moisture<30
-        AND LOWER(a.alert_type) LIKE '%irrigation%';
+        AND (LOWER(a.alert_type) LIKE '%irrigation%'
+                OR LOWER(a.alert_type) LIKE '%soil moisture%');
 ```
 #### 5. Display hourly temperature fluctuations exceeding 10°C within a single day. 
 ``` sql
 SELECT *
 FROM (
         SELECT
-                device_id,DATE(timestamp) AS Date,timestamp,air_temp,
-                LAG(air_temp) OVER ( PARTITION BY device_id , DATE(timestamp) ORDER BY timestamp) AS Prev_temperature,
-                ABS(air_temp-LAG(air_temp) OVER ( PARTITION BY device_id , DATE(timestamp) ORDER BY timestamp)) AS Temp_difference
+                DATE(timestamp) AS Date,
+        MIN(air_temp) AS Minimum_temperature,
+                MAX(air_temp) AS Maximum_temperature,
+                ABS(MIN(air_temp)-MAX(air_temp)) AS Temp_difference
         FROM farm_sensor_data
         WHERE air_temp IS NOT NULL
+    GROUP BY Date 
     ) AS temp_changes
 HAVING Temp_difference >10;
-
+```
 #### 6. Identify periods with consecutive rainfall measurements >5mm.
- sql
+``` sql
 SELECT *
 FROM (
         SELECT 
@@ -144,6 +147,7 @@ WITH alert_resolution_time AS (
     SELECT 
         a.alert_id,
         a.device_id,
+        a.alert_type,
         a.timestamp AS alert_time,
         MIN(sd.timestamp) AS resolution_time
     FROM 
@@ -159,18 +163,19 @@ WITH alert_resolution_time AS (
 ),
 time_differences AS (
     SELECT 
-        alert_id,
+        alert_id,alert_type,
         TIMESTAMPDIFF(HOUR, alert_time, resolution_time) AS hours_to_resolve
     FROM 
         alert_resolution_time
 )
 SELECT 
-    ROUND(AVG(hours_to_resolve), 2) AS avg_hours_to_resolve
+    alert_type,ROUND(AVG(hours_to_resolve), 2) AS avg_hours_to_resolve
 FROM 
-    time_differences;
-```
+    time_differences
+    GROUP BY alert_type;
+
 #### 10. Correlate high wind speed events (>15 km/h) with rainfall measurements.
-``` sql
+ sql
 SELECT 
         reading_id,device_id,timestamp,wind_speed_kmh,rainfall_mm
 FROM farm_sensor_data
@@ -179,9 +184,10 @@ WHERE wind_speed_kmh>15;
 #### 11. Show days where both low soil moisture and high temperatures occurred.
 ``` sql
 SELECT 
-        DATE(timestamp) AS Date,device_id,soil_moisture,air_temp
+        DATE(timestamp) AS Date,MIN(soil_moisture) AS Low_moisture,MAX(air_temp) AS Maximum_temperature
 FROM farm_sensor_data
-WHERE soil_moisture<25 AND air_temp>45;
+GROUP BY Date
+HAVING MIN(soil_moisture)<35 AND MAX(air_temp)>25;
 ```
 #### 12. Find humidity levels during irrigation valve activations.
 ``` sql
@@ -204,7 +210,7 @@ GROUP BY d.crop_type;
 #### 14. Identify devices that haven't transmitted data in over 24 hours.
 ``` sql
 SELECT 
-        d.*,TIMESTAMPDIFF(HOUR,MAX(sd.timestamp),(SELECT MAX(timestamp) FROM farm_sensor_data)) AS Duration
+        d.*,MAX(sd.timestamp) AS Last_contact,TIMESTAMPDIFF(HOUR,MAX(sd.timestamp),(SELECT MAX(timestamp) FROM farm_sensor_data)) AS Duration
 FROM farm_devices d 
 LEFT JOIN farm_sensor_data sd 
 ON sd.device_id=d.device_id
@@ -217,21 +223,25 @@ HAVING Duration>24
 SELECT HOUR(timestamp)AS Hour,COUNT(*) AS Total_data FROM farm_sensor_data
 GROUP BY hour
 ORDER BY Total_data DESC 
-LIMIT 1;
+LIMIT 2;
 ```
 #### 17. Predict irrigation needs by analyzing soil moisture depletion rates.
 ``` sql
-SELECT 
-        d.device_id,d.device_type,
-        sd.soil_moistute,LAG(sd.soil_moisture) OVER (PARTITION BY device_id ORDER BY sd.timestamp) AS Previous_moisture,
-        sd.timestamp,LAG(sd.timestamp) OVER (PARTITION BY device_id ORDER BY sd.timestamp) AS Previous_time,
-        TIMESTAMPDIFF(HOUR,        LAG(sd.timestamp) OVER (PARTITION BY device_id ORDER BY sd.timestamp),sd.timestamp) AS Duration_HOURS,
-    ROUND(        (LAG(sd.soil_moisture) OVER (PARTITION BY device_id ORDER BY sd.timestamp)-sd.soil_moisture)/
-    NULLIF(TIMESTAMPDIFF(HOUR,        LAG(sd.timestamp) OVER (PARTITION BY device_id ORDER BY sd.timestamp),sd.timestamp),0),2) AS Depletion_rate
-FROM farm_devices d 
-JOIN farm_sensor_data sd 
-ON sd.device_id=d.device_id
-WHERE sd.soil_moisture IS NOT NULL ;
+SELECT *
+FROM (
+        SELECT 
+                d.device_id,d.device_type,d.location,
+                sd.soil_moisture,LAG(sd.soil_moisture) OVER (PARTITION BY device_id ORDER BY sd.timestamp) AS Previous_moisture,
+                sd.timestamp,LAG(sd.timestamp) OVER (PARTITION BY device_id ORDER BY sd.timestamp) AS Previous_time,
+                TIMESTAMPDIFF(HOUR,        LAG(sd.timestamp) OVER (PARTITION BY device_id ORDER BY sd.timestamp),sd.timestamp) AS Duration_HOURS,
+                ROUND(        (LAG(sd.soil_moisture) OVER (PARTITION BY device_id ORDER BY sd.timestamp)-sd.soil_moisture)/
+                NULLIF(TIMESTAMPDIFF(HOUR,        LAG(sd.timestamp) OVER (PARTITION BY device_id ORDER BY sd.timestamp),sd.timestamp),0),2) AS Depletion_rate
+        FROM farm_devices d 
+        JOIN farm_sensor_data sd 
+        ON sd.device_id=d.device_id
+    WHERE sd.soil_moisture IS NOT NULL
+    ) AS Irrigation_needs
+WHERE Depletion_rate<0;
 ```
 #### 18. Compare morning vs. afternoon environmental conditions.
 ``` sql
@@ -252,7 +262,8 @@ FROM (
         FROM farm_sensor_data
 ) AS period_data
 WHERE time_period IS NOT NULL
-GROUP BY time_period;
+GROUP BY time_period
+HAVING time_period IN ('Morning','Afternoon');
 ```
 #### 19. Find devices with inconsistent data (e.g., rainfall reported without humidity).
 ``` sql
@@ -262,20 +273,80 @@ JOIN farm_sensor_data sd
 ON sd.device_id=d.device_id
 WHERE sd.rainfall_mm IS NOT NULL AND sd.humidity IS NULL;
 ```
-#### 20. Identify sensors needing calibration (values stuck at constants for 12+ hours)
+#### 20. Identify sensors needing calibration (values stuck at constants for 12+ hours).
 ``` sql
 SELECT 
-        d.device_id,d.device_type,sd.soil_moisture,
-    MIN(sd.timestamp) AS Start_time,
-    MAX(sd.timestamp) AS End_time,
-    TIMESTAMPDIFF(HOUR,MIN(sd.timestamp),MAX(sd.timestamp)) AS Duration,
-        COUNT(sd.reading_id) AS Total_readings
-FROM farm_devices d 
-JOIN farm_sensor_data sd 
-ON sd.device_id=d.device_id
-WHERE sd.soil_moisture IS NOT NULL AND LOWER(d.device_type) LIKE '%sensor%'
-GROUP BY d.device_id,d.device_type,sd.soil_moisture
-HAVING Duration>=12 AND Total_readings>=2;
+    device_id,
+    'soil_moisture' AS sensor_type,
+    soil_moisture AS sensor_value,
+    MIN(timestamp) AS start_time,
+    MAX(timestamp) AS end_time,
+    TIMESTAMPDIFF(HOUR, MIN(timestamp), MAX(timestamp)) AS duration_hours,
+    COUNT(*) AS reading_count
+FROM farm_sensor_data
+WHERE soil_moisture IS NOT NULL
+GROUP BY device_id, soil_moisture
+HAVING duration_hours >= 12 AND COUNT(*) >= 2
+
+UNION
+
+SELECT 
+    device_id,
+    'air_temp' AS sensor_type,
+    air_temp AS sensor_value,
+    MIN(timestamp),
+    MAX(timestamp),
+    TIMESTAMPDIFF(HOUR, MIN(timestamp), MAX(timestamp)) AS duration_hours,
+    COUNT(*)
+FROM farm_sensor_data
+WHERE air_temp IS NOT NULL
+GROUP BY device_id, air_temp
+HAVING duration_hours >= 12 AND COUNT(*) >= 2
+
+UNION
+
+SELECT 
+    device_id,
+    'humidity' AS sensor_type,
+    humidity AS sensor_value,
+    MIN(timestamp),
+    MAX(timestamp),
+    TIMESTAMPDIFF(HOUR, MIN(timestamp), MAX(timestamp)) AS duration_hours,
+    COUNT(*)
+FROM farm_sensor_data
+WHERE humidity IS NOT NULL
+GROUP BY device_id, humidity
+HAVING duration_hours >= 12 AND COUNT(*) >= 2
+
+UNION
+
+SELECT 
+    device_id,
+    'rainfall_mm' AS sensor_type,
+    rainfall_mm AS sensor_value,
+    MIN(timestamp),
+    MAX(timestamp),
+    TIMESTAMPDIFF(HOUR, MIN(timestamp), MAX(timestamp))AS duration_hours,
+    COUNT(*)
+FROM farm_sensor_data
+WHERE rainfall_mm IS NOT NULL
+GROUP BY device_id, rainfall_mm
+HAVING duration_hours >= 12 AND COUNT(*) >= 2
+
+UNION
+
+SELECT 
+    device_id,
+    'wind_speed_kmh' AS sensor_type,
+    wind_speed_kmh AS sensor_value,
+    MIN(timestamp),
+    MAX(timestamp),
+    TIMESTAMPDIFF(HOUR, MIN(timestamp), MAX(timestamp)) AS duration_hours,
+    COUNT(*)
+FROM farm_sensor_data
+WHERE wind_speed_kmh IS NOT NULL
+GROUP BY device_id, wind_speed_kmh
+HAVING duration_hours >= 12 AND COUNT(*) >= 2;
 ```
 ## Conclusion:
 The GE_Digital_db smart farming database is a robust, IoT-integrated system that enhances agricultural productivity by:
