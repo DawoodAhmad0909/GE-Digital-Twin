@@ -223,8 +223,8 @@ LIMIT 1;
 ``` sql
 SELECT 
         d.device_id,d.device_type,
-        LAG(sd.soil_moisture) OVER (PARTITION BY device_id ORDER BY sd.timestamp) AS Previous_moisture,
-        LAG(sd.timestamp) OVER (PARTITION BY device_id ORDER BY sd.timestamp) AS Previous_time,
+        sd.soil_moistute,LAG(sd.soil_moisture) OVER (PARTITION BY device_id ORDER BY sd.timestamp) AS Previous_moisture,
+        sd.timestamp,LAG(sd.timestamp) OVER (PARTITION BY device_id ORDER BY sd.timestamp) AS Previous_time,
         TIMESTAMPDIFF(HOUR,        LAG(sd.timestamp) OVER (PARTITION BY device_id ORDER BY sd.timestamp),sd.timestamp) AS Duration_HOURS,
     ROUND(        (LAG(sd.soil_moisture) OVER (PARTITION BY device_id ORDER BY sd.timestamp)-sd.soil_moisture)/
     NULLIF(TIMESTAMPDIFF(HOUR,        LAG(sd.timestamp) OVER (PARTITION BY device_id ORDER BY sd.timestamp),sd.timestamp),0),2) AS Depletion_rate
@@ -260,8 +260,7 @@ SELECT  d.device_id,d.device_type,d.location,sd.timestamp,sd.rainfall_mm,sd.humi
 FROM farm_devices d 
 JOIN farm_sensor_data sd 
 ON sd.device_id=d.device_id
-WHERE (sd.rainfall_mm IS NULL AND sd.humidity IS NOT NULL)
-        OR (sd.rainfall_mm IS NOT NULL AND sd.humidity IS NULL);
+WHERE sd.rainfall_mm IS NOT NULL AND sd.humidity IS NULL;
 ```
 #### 20. Identify sensors needing calibration (values stuck at constants for 12+ hours)
 ``` sql
